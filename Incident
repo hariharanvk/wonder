@@ -1,0 +1,19 @@
+ let IncidentLookback = 90d; //add custom lookback in this variable
+let IncidentsCreated = SecurityIncident //enumerate created security incidents within lookback period 
+| where TimeGenerated > ago(IncidentLookback)
+| summarize arg_min(TimeGenerated,*) by IncidentNumber
+| project IncidentCreatedTime = CreatedTime, IncidentNumber;
+let IncidentAssigned = SecurityIncident //enumerate first assignment datetime
+| where TimeGenerated > ago(IncidentLookback)
+| extend Assignee = todynamic(Owner).assignedTo
+| where isnotempty(Assignee)
+| summarize arg_min(TimeGenerated,*) by IncidentNumber
+| project FirstAssignmentTimestamp = TimeGenerated, Assignee, IncidentNumber;
+SecurityIncident //enumerate entry for closed incidents and joining the information from previous tables 
+| where TimeGenerated > ago(IncidentLookback)
+| where Status == "Closed"
+| summarize arg_min(TimeGenerated,*) by IncidentNumber
+| project IncidentCloseTimestamp = TimeGenerated, IncidentNumber
+| join kind=inner (IncidentsCreated) on IncidentNumber
+| join kind=inner (IncidentAssigned) on IncidentNumber
+| project IncidentCreatedTime, IncidentNumber, FirstAssignmentTimestamp, Assignee, IncidentCloseTimestamp
